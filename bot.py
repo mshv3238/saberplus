@@ -7,11 +7,11 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 import yt_dlp
 from shazamio import Shazam
 
-# 1. Loggingni sozlash (Xatoliklarni terminalda ko'rsatish uchun)
+# Loggingni sozlash
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
 DOWNLOAD_DIR = "downloads"
@@ -20,12 +20,11 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 USERS_FILE = "users.json"
 user_urls = {}
 
-# --- SOZLAMALAR (O'zingizga moslab o'zgartirasiz) ---
-ADMIN_ID = 123456789          # <-- O'zingizning Telegram ID raqamingizni yozing
-CHANNEL_ID = "https://t.me/saberplus_u" # <-- Majburiy obuna bo'ladigan kanal username (agar kerak bo'lmasa bo'sh qoldiring)
-CHANNEL_URL =  "https://t.me/saberplus_u" # <-- Kanal havolasi
+# --- SOZLAMALAR ---
+ADMIN_ID = 123456789                  # <-- O'zingizning Telegram ID raqamingizni yozing (Masalan: 12345678)
+CHANNEL_ID = "@saberplus_u"           # <-- Kanalingiz username'i
+CHANNEL_URL = "https://t.me/saberplus_u" # <-- Kanalingizning to'liq havolasi
 
-# Foydalanuvchilarni bazaga qo'shish va sanash
 def add_user(user_id):
     users = set()
     if os.path.exists(USERS_FILE):
@@ -44,7 +43,6 @@ def add_user(user_id):
         pass
     return len(users)
 
-# 2. Render "Port scan timeout" xatosi bermasligi uchun Web-server
 async def handle(request):
     return web.Response(text="SaberPlus Bot is running perfectly!")
 
@@ -58,7 +56,6 @@ async def start_web_server():
     await site.start()
     logging.info(f"Web server {port}-portda muvaffaqiyatli ishga tushdi.")
 
-# 3. Videoni yuklab olish (YouTube, Instagram, TikTok)
 def download_video(url: str) -> str:
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s.%(ext)s'),
@@ -69,7 +66,6 @@ def download_video(url: str) -> str:
         info = ydl.extract_info(url, download=True)
         return ydl.prepare_filename(info)
 
-# 4. Audioni yuklab olish va Shazam orqali musiqa nomini aniqlash
 async def get_audio_and_recognize(url: str):
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s_audio.%(ext)s'),
@@ -104,9 +100,8 @@ async def get_audio_and_recognize(url: str):
             
     return audio_path, f"{track_artist} - {track_title}"
 
-# Majburiy obunani tekshirish funksiyasi
-async def check_subscription(bot: Bot, user_id:https://t.me/saberplus_u int) -> bool:
-    if not CHANNEL_ID:https://t.me/saberplus_u
+async def check_subscription(bot: Bot, user_id: int) -> bool:
+    if not CHANNEL_ID:
         return True
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
@@ -122,19 +117,23 @@ async def main():
         logging.error("BOT_TOKEN topilmadi!")
         return
 
-    # Render serverini birinchi bo'lib ishga tushiramiz
     await start_web_server()
 
     bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
 
-    # --- /start BUYRUG'I VA REKLAMA/KANAL TEKSHiriruvi ---
+    def get_main_keyboard():
+        builder = InlineKeyboardBuilder()
+        builder.button(text="📢 Kanalimiz", url=CHANNEL_URL)
+        builder.button(text="ℹ️ Bot haqida", callback_data="about_bot")
+        builder.adjust(1)
+        return builder.as_markup()
+
     @dp.message(F.text == "/start")
     async def cmd_start(message: types.Message):
         user_id = message.from_user.id
         count = add_user(user_id)
 
-        # Majburiy obuna tekshiruvi
         if CHANNEL_ID and not await check_subscription(bot, user_id):
             builder = InlineKeyboardBuilder()
             builder.button(text="📢 Kanalga obuna bo'lish", url=CHANNEL_URL)
@@ -156,13 +155,11 @@ async def main():
             reply_markup=get_main_keyboard()
         )
 
-    # Obunani tekshirish tugmasi uchun handler
     @dp.callback_query(F.data == "check_sub")
     async def callback_check_sub(callback: types.CallbackQuery):
         user_id = callback.from_user.id
         if await check_subscription(bot, user_id):
             await callback.message.delete()
-            count = get_user_count() if 'get_user_count' in globals() else 0
             await callback.message.answer(
                 "✅ Rahmat! Obuna tasdiqlandi.\n\n"
                 "📥 Endi Instagram, YouTube yoki TikTok havolasini yuborishingiz mumkin!",
@@ -171,18 +168,10 @@ async def main():
         else:
             await callback.answer("❌ Siz hali kanalga obuna bo'lmadingiz!", show_alert=True)
 
-    def get_main_keyboard():
-        builder = InlineKeyboardBuilder()
-        builder.button(text="📢 Reklama joylashtirish", url="https://t.me/sizning_username") # O'z profilingizni yozing
-        builder.button(text="ℹ️ Bot haqida", callback_data="about_bot")
-        builder.adjust(1)
-        return builder.as_markup()
-
     @dp.callback_query(F.data == "about_bot")
     async def about_callback(callback: types.CallbackQuery):
         await callback.answer("SaberPlus — Instagram, YouTube va TikTok'dan video va musiqa yuklovchi tezkor bot!", show_alert=True)
 
-    # --- ADMIN REKLAMA TARQATISH BUYRUG'I (/send) ---
     @dp.message(F.text.startswith("/send"))
     async def broadcast_message(message: types.Message):
         if message.from_user.id != ADMIN_ID:
@@ -209,18 +198,16 @@ async def main():
             try:
                 await bot.send_message(uid, text)
                 success += 1
-                await asyncio.sleep(0.04) # Telegram spam cheklovi uchun
+                await asyncio.sleep(0.04)
             except Exception:
                 blocked += 1
 
         await message.answer(f"✅ Reklama tarqatildi!\n\n✔️ Yetib bordi: {success} ta\n❌ Bloklaganlar: {blocked} ta")
 
-    # --- HAVOLALARNI QABUL QILISH VA VIDEO YUKLASH ---
     @dp.message(F.text.startswith("http"))
     async def handle_url(message: types.Message):
         user_id = message.from_user.id
         
-        # Majburiy obunani tekshirish
         if CHANNEL_ID and not await check_subscription(bot, user_id):
             builder = InlineKeyboardBuilder()
             builder.button(text="📢 Kanalga obuna bo'lish", url=CHANNEL_URL)
@@ -270,7 +257,6 @@ async def main():
                 except:
                     pass
 
-    # --- MUSIQANI SHAZAM ORQALI TOPISH VA YUBORISH ---
     @dp.callback_query(F.data == "get_audio_version")
     async def send_audio_callback(callback: types.CallbackQuery):
         user_id = callback.from_user.id
