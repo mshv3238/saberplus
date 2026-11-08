@@ -22,8 +22,8 @@ user_urls = {}
 
 # --- SOZLAMALAR (O'zingizga moslab o'zgartirasiz) ---
 ADMIN_ID = 123456789          # <-- O'zingizning Telegram ID raqamingizni yozing
-CHANNEL_ID = "@sizning_kanal" # <-- Majburiy obuna bo'ladigan kanal username (agar kerak bo'lmasa bo'sh qoldiring)
-CHANNEL_URL = "https://t.me/sizning_kanal" # <-- Kanal havolasi
+CHANNEL_ID = "https://t.me/saberplus_u" # <-- Majburiy obuna bo'ladigan kanal username (agar kerak bo'lmasa bo'sh qoldiring)
+CHANNEL_URL =  "https://t.me/saberplus_u" # <-- Kanal havolasi
 
 # Foydalanuvchilarni bazaga qo'shish va sanash
 def add_user(user_id):
