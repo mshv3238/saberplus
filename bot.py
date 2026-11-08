@@ -1,9 +1,4 @@
-import asyncio
-import logging
-import os
-import sys
-import json
-from aiohttp import web
+t web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -20,45 +15,38 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 USERS_FILE = "users.json"
 user_urls = {}
 
-# Foydalanuvchilarni bazaga qo'shish va sanash
 def add_user(user_id):
     users = set()
     if os.path.exists(USERS_FILE):
         try:
             with open(USERS_FILE, "r") as f:
-                users = set(json.load(f))
-        except:
+                content = f.read().strip()
+                if content:
+                    users = set(json.loads(content))
+        except Exception:
             pass
     users.add(user_id)
-    with open(USERS_FILE, "w") as f:
-        json.dump(list(users), f)
+    try:
+        with open(USERS_FILE, "w") as f:
+            json.dump(list(users), f)
+    except Exception:
+        pass
     return len(users)
 
-def get_user_count():
-    if os.path.exists(USERS_FILE):
-        try:
-            with open(USERS_FILE, "r") as f:
-                return len(json.load(f))
-        except:
-            return 0
-    return 0
-
-# Render talab qiladigan web server
+# Render uchun web server (Port ochib turish shart)
 async def handle(request):
-    return web.Response(text="SaberPlus Bot is running!")
+    return web.Response(text="SaberPlus Bot is running perfectly!")
 
 async def start_web_server():
     app = web.Application()
     app.router.add_get("/", handle)
     runner = web.AppRunner(app)
     await runner.setup()
-    
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     logging.info(f"Web server {port}-portda muvaffaqiyatli ishga tushdi.")
 
-# Videoni yuklab olish
 def download_video(url: str) -> str:
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s.%(ext)s'),
@@ -69,15 +57,12 @@ def download_video(url: str) -> str:
         info = ydl.extract_info(url, download=True)
         return ydl.prepare_filename(info)
 
-# Faqat audioni yuklab olish va Shazam orqali nomini aniqlash
 async def get_audio_and_recognize(url: str):
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s_audio.%(ext)s'),
         'format': 'bestaudio/best',
         'noplaylist': True,
     }
-    
-    # Videodan audioni ajratib olamiz
     loop = asyncio.get_running_loop()
     def extract():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -94,7 +79,6 @@ async def get_audio_and_recognize(url: str):
     track_title = "Noma'lum musiqa"
     track_artist = "SaberPlus"
     
-    # Shazam yordamida qo'shiqni aniqlash
     if audio_path and os.path.exists(audio_path):
         try:
             shazam = Shazam()
@@ -113,6 +97,7 @@ async def main():
         logging.error("BOT_TOKEN topilmadi!")
         return
 
+    # Oldin web server ishga tushadi
     await start_web_server()
 
     bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -121,19 +106,10 @@ async def main():
     @dp.message(F.text == "/start")
     async def cmd_start(message: types.Message):
         count = add_user(message.from_user.id)
-        
-        try:
-            await bot.set_my_short_description(
-                short_description=f"👥 Foydalanuvchilar: {count} ta\n📥 Instagram, YouTube, TikTok yuklovchi bot!"
-            )
-        except Exception as e:
-            logging.error(f"Tavsifni yangilash xatosi: {e}")
-
         await message.answer(
             f"✨ <b>SaberPlus Bot</b>'ga xush kelibsiz!\n\n"
-            f"📊 Hozirgi kundagi foydalanuvchilar: <b>{count} ta</b>\n\n"
-            "Menga Instagram, YouTube yoki TikTok havolasini yuboring. "
-            "Men sizga videoni va ostidagi **musiqasini (aniqlagan holda)** taqdim etaman!"
+            f"📊 Jami foydalanuvchilar: <b>{count} ta</b>\n\n"
+            "Menga Instagram, YouTube yoki TikTok havolasini yuboring!"
         )
 
     @dp.message(F.text.startswith("http"))
@@ -151,20 +127,18 @@ async def main():
             
             if file_path and os.path.exists(file_path):
                 video_file = types.FSInputFile(file_path)
-                
                 builder = InlineKeyboardBuilder()
                 builder.button(text="🎵 Musiqasini topish va yuklab olish", callback_data="get_audio_version")
                 
                 await message.answer_video(
                     video=video_file,
-                    caption="✅ <b>SaberPlus</b> orqali yuklab olindi!\n\n👇 Musiqasining nomini aniqlab olish uchun tugmani bosing:",
+                    caption="✅ <b>SaberPlus</b> orqali yuklab olindi!",
                     reply_markup=builder.as_markup()
                 )
                 await processing_msg.delete()
             else:
-                await message.answer("❌ Kechirasiz, bu havoladan videoni yuklab bo'lmadi.")
+                await message.answer("❌ Kechirasiz, videoni yuklab bo'lmadi.")
                 await processing_msg.delete()
-                
         except Exception as e:
             logging.error(f"Xatolik: {e}")
             await message.answer(f"❌ Xatolik yuz berdi: {e}")
@@ -185,26 +159,25 @@ async def main():
         url = user_urls.get(user_id)
         
         if not url:
-            await callback.answer("❌ Havola topilmadi yoki eskirgan. Iltimos, havolani qaytadan yuboring.", show_alert=True)
+            await callback.answer("❌ Havola topilmadi yoki eskirgan. Qaytadan yuboring.", show_alert=True)
             return
 
-        await callback.message.answer("🎧 Musiqa qidirilmoqda va Shazam orqali aniqlanmoqda, biroz kuting...")
+        await callback.message.answer("🎧 Musiqa Shazam orqali aniqlanmoqda, kuting...")
         audio_path = None
         try:
             audio_path, track_info = await get_audio_and_recognize(url)
-            
             if audio_path and os.path.exists(audio_path):
                 audio_file = types.FSInputFile(audio_path)
                 await callback.message.answer_audio(
                     audio=audio_file,
-                    caption=f"🎵 <b>Musiqa nomi:</b> {track_info}\n🤖 <i>SaberPlus orqali topildi</i>"
+                    caption=f"🎵 <b>Musiqa:</b> {track_info}\n🤖 <i>SaberPlus</i>"
                 )
-                await callback.answer("Musiqa muvaffaqiyatli topildi! 🎉")
+                await callback.answer("Tayyor! 🎉")
             else:
-                await callback.message.answer("❌ Kechirasiz, musiqani aniqlab bo'lmadi.")
+                await callback.message.answer("❌ Musiqani aniqlab bo'lmadi.")
         except Exception as e:
             logging.error(f"Audio xatolik: {e}")
-            await callback.message.answer(f"❌ Xatolik yuz berdi: {e}")
+            await callback.message.answer(f"❌ Xatolik: {e}")
         finally:
             if audio_path and os.path.exists(audio_path):
                 try:
@@ -213,7 +186,7 @@ async def main():
                     pass
 
     await bot.delete_webhook(drop_pending_updates=True)
-    logging.info("SaberPlus bot polling boshlandi...")
+    logging.info("Bot polling boshlandi...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
