@@ -21,9 +21,9 @@ USERS_FILE = "users.json"
 user_urls = {}
 
 # --- SOZLAMALAR ---
-ADMIN_ID = 123456789                  # <-- O'zingizning Telegram ID raqamingizni yozing (Masalan: 12345678)
-CHANNEL_ID = "@saberplus_u"           # <-- Kanalingiz username'i
-CHANNEL_URL = "https://t.me/saberplus_u" # <-- Kanalingizning to'liq havolasi
+ADMIN_USERNAME = "@saberplus_uz"       # Admin username'i
+CHANNEL_ID = "@saberplus_u"           # Kanalingiz username'i
+CHANNEL_URL = "https://t.me/saberplus_u" # Kanalingizning to'liq havolasi
 
 def add_user(user_id):
     users = set()
@@ -174,7 +174,8 @@ async def main():
 
     @dp.message(F.text.startswith("/send"))
     async def broadcast_message(message: types.Message):
-        if message.from_user.id != ADMIN_ID:
+        # Adminni username orqali tekshirish
+        if message.from_user.username != ADMIN_USERNAME.lstrip('@'):
             return
 
         text = message.text[len("/send"):].strip()
