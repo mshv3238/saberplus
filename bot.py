@@ -15,10 +15,9 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Foydalanuvchilarning oxirgi havolalarini saqlab turish uchun lug'at
 user_urls = {}
 
-# Render uchun web server
+# 1. Render talab qiladigan web server (Portni birinchi bo'lib ochadi)
 async def handle(request):
     return web.Response(text="SaberPlus Bot is running!")
 
@@ -28,12 +27,12 @@ async def start_web_server():
     runner = web.AppRunner(app)
     await runner.setup()
     
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 10000))  # Render ko'pincha PORT beradi
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    logging.info(f"Web server {port}-portda ishga tushdi.")
+    logging.info(f"Web server {port}-portda muvaffaqiyatli ishga tushdi.")
 
-# Videoni yuklab olish (musiqasi va ovozi bilan birga)
+# Videoni yuklab olish
 def download_video(url: str) -> str:
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s.%(ext)s'),
@@ -44,7 +43,7 @@ def download_video(url: str) -> str:
         info = ydl.extract_info(url, download=True)
         return ydl.prepare_filename(info)
 
-# Faqat audioni yuklab olish
+# Audioni yuklab olish
 def download_audio(url: str) -> str:
     ydl_opts = {
         'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s_audio.%(ext)s'),
@@ -66,6 +65,9 @@ async def main():
         logging.error("BOT_TOKEN topilmadi!")
         return
 
+    # Oldin zudlik bilan Web Serverni ishga tushiramiz (Render portni ko'rishi uchun)
+    await start_web_server()
+
     bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
 
@@ -74,14 +76,14 @@ async def main():
         await message.answer(
             "✨ <b>SaberPlus Bot</b>'ga xush kelibsiz!\n\n"
             "Menga Instagram, YouTube yoki TikTok havolasini yuboring. "
-            "Men sizga videoni **musiqasi bilan birga** yuklab beraman va qo'shimcha ravishda musiqasini ham alohida olishingiz uchun imkoniyat yarataman!"
+            "Men sizga videoni **musiqasi bilan birga** yuklab beraman va xohlasangiz musiqasini alohida ham chiqarib beraman!"
         )
 
     @dp.message(F.text.startswith("http"))
     async def handle_url(message: types.Message):
         url = message.text.strip()
         user_id = message.from_user.id
-        user_urls[user_id] = url  # Havolani vaqtincha saqlaymiz
+        user_urls[user_id] = url
         
         processing_msg = await message.answer("⏳ Video tayyorlanmoqda, iltimos biroz kuting...")
         
@@ -93,7 +95,6 @@ async def main():
             if file_path and os.path.exists(file_path):
                 video_file = types.FSInputFile(file_path)
                 
-                # Tugma yaratamiz: Musiqasini ham olish uchun
                 builder = InlineKeyboardBuilder()
                 builder.button(text="🎵 Musiqasini ham yuklab olish", callback_data="get_audio_version")
                 
@@ -121,7 +122,6 @@ async def main():
                 except:
                     pass
 
-    # Foydalanuvchi "Musiqasini ham yuklab olish" tugmasini bosganda
     @dp.callback_query(F.data == "get_audio_version")
     async def send_audio_callback(callback: types.CallbackQuery):
         user_id = callback.from_user.id
@@ -156,7 +156,6 @@ async def main():
                 except:
                     pass
 
-    await start_web_server()
     await bot.delete_webhook(drop_pending_updates=True)
     logging.info("SaberPlus bot polling boshlandi...")
     await dp.start_polling(bot)
