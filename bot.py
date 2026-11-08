@@ -105,8 +105,8 @@ async def get_audio_and_recognize(url: str):
     return audio_path, f"{track_artist} - {track_title}"
 
 # Majburiy obunani tekshirish funksiyasi
-async def check_subscription(bot: Bot, user_id: int) -> bool:
-    if not CHANNEL_ID:
+async def check_subscription(bot: Bot, user_id:https://t.me/saberplus_u int) -> bool:
+    if not CHANNEL_ID:https://t.me/saberplus_u
         return True
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
