@@ -24,7 +24,7 @@ user_urls = {}
 # --- SOZLAMALAR ---
 ADMIN_USERNAME = "@saberplus_uz"  # Sizning admin username'ingiz
 
-# Kanal sozlamalarini dinamik boshqarish
+# Kanal sozlamalarini dinamik boshqarish uchun funksiya
 def get_channel_config():
     if os.path.exists(CHANNELS_FILE):
         try:
@@ -33,8 +33,8 @@ def get_channel_config():
                 return data.get("channel_id"), data.get("channel_url")
         except Exception:
             pass
-    # Boshlang'ich standart kanal
-    return "@saberplus_u", "https://t.me/saberplus_u"
+    # Boshlang'ich standart kanal (Sizning kanalingiz)
+    return "@saberplus_uz", "https://t.me/saberplus_uz"
 
 def save_channel_config(channel_id, channel_url):
     try:
