@@ -202,7 +202,6 @@ async def main():
     @dp.callback_query(F.data == "check_sub")
     async def callback_check_sub(callback: types.CallbackQuery):
         user_id = callback.from_user.id
-        channel_id, channel_url = get_channel_config()
         
         if await check_subscription(bot, user_id):
             try:
@@ -423,7 +422,7 @@ async def main():
             if audio_path and os.path.exists(audio_path):
                 try:
                     os.remove(audio_path)
-                end:
+                except:
                     pass
 
     await bot.delete_webhook(drop_pending_updates=True)
