@@ -22,7 +22,7 @@ user_urls = {}
 
 # --- SOZLAMALAR ---
 ADMIN_USERNAME = "@saberplus_uz"
-CHANNEL_ID = "@saberplus_u"
+CHANNEL_ID = "@saberplus_u"        # Kanal username yoki ID (Masalan: -1001234567890 yoki @saberplus_u)
 CHANNEL_URL = "https://t.me/saberplus_u"
 
 def add_user(user_id):
@@ -44,7 +44,7 @@ def add_user(user_id):
     return len(users)
 
 async def handle(request):
-    return web.Response(text="SaberPlus Bot is running perfectly!")
+    return web.Response(text="SaberPlus Bot is running perfectly 24/7!")
 
 async def start_web_server():
     app = web.Application()
@@ -100,14 +100,34 @@ async def get_audio_and_recognize(url: str):
             
     return audio_path, f"{track_artist} - {track_title}"
 
+def search_and_download_audio(query: str):
+    ydl_opts = {
+        'outtmpl': os.path.join(DOWNLOAD_DIR, '%(id)s_search.%(ext)s'),
+        'format': 'bestaudio/best',
+        'default_search': 'ytsearch1',
+        'noplaylist': True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(query, download=True)
+        if 'entries' in info:
+            info = info['entries'][0]
+        filename = ydl.prepare_filename(info)
+        base, _ = os.path.splitext(filename)
+        mp3_file = base + '.mp3'
+        if os.path.exists(mp3_file):
+            return mp3_file, info.get('title', query)
+        return filename, info.get('title', query)
+
 async def check_subscription(bot: Bot, user_id: int) -> bool:
     if not CHANNEL_ID:
         return True
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+        # Agar foydalanuvchi kanalda bo'lsa
         if member.status in ["member", "administrator", "creator"]:
             return True
-    except Exception:
+    except Exception as e:
+        logging.error(f"Obunani tekshirishda xatolik: {e}")
         pass
     return False
 
@@ -150,8 +170,8 @@ async def main():
         await message.answer(
             f"✨ <b>SaberPlus Bot</b>'ga xush kelibsiz!\n\n"
             f"📊 Jami foydalanuvchilar: <b>{count} ta</b>\n\n"
-            "📥 Menga Instagram, YouTube yoki TikTok havolasini yuboring. "
-            "Men sizga videoni va musiqasini yuklab beraman!",
+            "📥 Menga Instagram, YouTube, TikTok havolasini yoki istalgan **qo'shiq nomini** yuboring. "
+            "Men sizga video yoki musiqani topib beraman!",
             reply_markup=get_main_keyboard()
         )
 
@@ -159,18 +179,21 @@ async def main():
     async def callback_check_sub(callback: types.CallbackQuery):
         user_id = callback.from_user.id
         if await check_subscription(bot, user_id):
-            await callback.message.delete()
+            try:
+                await callback.message.delete()
+            except:
+                pass
             await callback.message.answer(
                 "✅ Rahmat! Obuna tasdiqlandi.\n\n"
-                "📥 Endi Instagram, YouTube yoki TikTok havolasini yuborishingiz mumkin!",
+                "📥 Endi havolani yoki qo'shiq nomini yuborishingiz mumkin!",
                 reply_markup=get_main_keyboard()
             )
         else:
-            await callback.answer("❌ Siz hali kanalga obuna bo'lmadingiz!", show_alert=True)
+            await callback.answer("❌ Siz hali kanalga obuna bo'lmadingiz! Iltimos, avval obuna bo'ling.", show_alert=True)
 
     @dp.callback_query(F.data == "about_bot")
     async def about_callback(callback: types.CallbackQuery):
-        await callback.answer("SaberPlus — Instagram, YouTube va TikTok'dan video va musiqa yuklovchi tezkor bot!", show_alert=True)
+        await callback.answer("SaberPlus — Instagram, YouTube, TikTok'dan video va istalgan musiqani qidirib topib beruvchi tezkor bot!", show_alert=True)
 
     @dp.message(F.text.startswith("/send"))
     async def broadcast_message(message: types.Message):
@@ -289,6 +312,53 @@ async def main():
                 except:
                     pass
 
+    # Qo'shiq nomini yozganda qidirib beradigan qism
+    @dp.message(F.text)
+    async def handle_text_search(message: types.Message):
+        if message.text.startswith('/'):
+            return
+            
+        user_id = message.from_user.id
+        if CHANNEL_ID and not await check_subscription(bot, user_id):
+            builder = InlineKeyboardBuilder()
+            builder.button(text="📢 Kanalga obuna bo'lish", url=CHANNEL_URL)
+            builder.button(text="✅ Obunani tekshirish", callback_data="check_sub")
+            builder.adjust(1)
+            await message.answer("⚠️ Botdan foydalanish uchun avval homiy kanalga obuna bo'ling!", reply_markup=builder.as_markup())
+            return
+
+        query = message.text.strip()
+        processing_msg = await message.answer(f"🔍 <b>\"{query}\"</b> bo'yicha musiqa qidirilmoqda...")
+
+        audio_path = None
+        try:
+            loop = asyncio.get_running_loop()
+            audio_path, track_title = await loop.run_in_executor(None, search_and_download_audio, query)
+
+            if audio_path and os.path.exists(audio_path):
+                audio_file = types.FSInputFile(audio_path)
+                await message.answer_audio(
+                    audio=audio_file,
+                    caption=f"🎵 <b>Topilgan musiqa:</b> {track_title}\n🤖 <i>SaberPlus orqali topildi</i>"
+                )
+                await processing_msg.delete()
+            else:
+                await message.answer("❌ Kechirasiz, bu nomdagi musiqa topilmadi.")
+                await processing_msg.delete()
+        except Exception as e:
+            logging.error(f"Qidiruv xatoligi: {e}")
+            await message.answer("❌ Musiqani qidirishda xatolik yuz berdi.")
+            try:
+                await processing_msg.delete()
+            except:
+                pass
+        finally:
+            if audio_path and os.path.exists(audio_path):
+                try:
+                    os.remove(audio_path)
+                except:
+                    pass
+
     await bot.delete_webhook(drop_pending_updates=True)
     logging.info("SaberPlus bot polling boshlandi...")
     await dp.start_polling(bot)
@@ -296,5 +366,5 @@ async def main():
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except (KeyboardImportError, KeyboardInterrupt, SystemExit):
+    except (KeyboardInterrupt, SystemExit):
         logging.info("Bot to'xtatildi!")
