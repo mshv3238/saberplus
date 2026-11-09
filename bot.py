@@ -21,9 +21,9 @@ USERS_FILE = "users.json"
 user_urls = {}
 
 # --- SOZLAMALAR ---
-ADMIN_USERNAME = "@saberplus_uz"       # Admin username'i
-CHANNEL_ID = "@saberplus_u"           # Kanalingiz username'i
-CHANNEL_URL = "https://t.me/saberplus_u" # Kanalingizning to'liq havolasi
+ADMIN_USERNAME = "@saberplus_uz"
+CHANNEL_ID = "@saberplus_u"
+CHANNEL_URL = "https://t.me/saberplus_u"
 
 def add_user(user_id):
     users = set()
@@ -174,7 +174,6 @@ async def main():
 
     @dp.message(F.text.startswith("/send"))
     async def broadcast_message(message: types.Message):
-        # Adminni username orqali tekshirish
         if message.from_user.username != ADMIN_USERNAME.lstrip('@'):
             return
 
@@ -246,7 +245,7 @@ async def main():
                 
         except Exception as e:
             logging.error(f"Xatolik: {e}")
-            await message.answer(f"❌ Xatolik yuz berdi: Videoni yuklash imkoni bo'lmadi.")
+            await message.answer("❌ Xatolik yuz berdi: Videoni yuklash imkoni bo'lmadi.")
             try:
                 await processing_msg.delete()
             except:
@@ -282,7 +281,7 @@ async def main():
                 await callback.message.answer("❌ Kechirasiz, musiqani aniqlab bo'lmadi.")
         except Exception as e:
             logging.error(f"Audio xatolik: {e}")
-            await callback.message.answer(f"❌ Xatolik yuz berdi.")
+            await callback.message.answer("❌ Xatolik yuz berdi.")
         finally:
             if audio_path and os.path.exists(audio_path):
                 try:
@@ -297,5 +296,5 @@ async def main():
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
+    except (KeyboardImportError, KeyboardInterrupt, SystemExit):
         logging.info("Bot to'xtatildi!")
