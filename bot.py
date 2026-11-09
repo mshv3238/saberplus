@@ -18,12 +18,31 @@ DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 USERS_FILE = "users.json"
+CHANNELS_FILE = "channels.json"
 user_urls = {}
 
 # --- SOZLAMALAR ---
-ADMIN_USERNAME = "@saberplus_uz"
-CHANNEL_ID = "@saberplus_u"        # Kanal username yoki ID (Masalan: -1001234567890 yoki @saberplus_u)
-CHANNEL_URL = "https://t.me/saberplus_u"
+ADMIN_USERNAME = "@saberplus_uz"  # Sizning admin username'ingiz
+
+# Kanal sozlamalarini dinamik boshqarish
+def get_channel_config():
+    if os.path.exists(CHANNELS_FILE):
+        try:
+            with open(CHANNELS_FILE, "r") as f:
+                data = json.load(f)
+                return data.get("channel_id"), data.get("channel_url")
+        except Exception:
+            pass
+    # Boshlang'ich standart kanal
+    return "@saberplus_u", "https://t.me/saberplus_u"
+
+def save_channel_config(channel_id, channel_url):
+    try:
+        with open(CHANNELS_FILE, "w") as f:
+            json.dump({"channel_id": channel_id, "channel_url": channel_url}, f)
+        return True
+    except Exception:
+        return False
 
 def add_user(user_id):
     users = set()
@@ -119,13 +138,14 @@ def search_and_download_audio(query: str):
         return filename, info.get('title', query)
 
 async def check_subscription(bot: Bot, user_id: int) -> bool:
-    if not CHANNEL_ID:
+    channel_id, _ = get_channel_config()
+    if not channel_id:
         return True
     try:
-        member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
-        # Agar foydalanuvchi kanalda bo'lsa
-        if member.status in ["member", "administrator", "creator"]:
-            return True
+        member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
+        if member.status in ["member", "administrator", "creator", "restricted"]:
+            if getattr(member, 'is_member', True):
+                return True
     except Exception as e:
         logging.error(f"Obunani tekshirishda xatolik: {e}")
         pass
@@ -143,8 +163,10 @@ async def main():
     dp = Dispatcher()
 
     def get_main_keyboard():
+        _, channel_url = get_channel_config()
         builder = InlineKeyboardBuilder()
-        builder.button(text="📢 Kanalimiz", url=CHANNEL_URL)
+        if channel_url:
+            builder.button(text="📢 Kanalimiz", url=channel_url)
         builder.button(text="ℹ️ Bot haqida", callback_data="about_bot")
         builder.adjust(1)
         return builder.as_markup()
@@ -153,10 +175,12 @@ async def main():
     async def cmd_start(message: types.Message):
         user_id = message.from_user.id
         count = add_user(user_id)
+        channel_id, channel_url = get_channel_config()
 
-        if CHANNEL_ID and not await check_subscription(bot, user_id):
+        if channel_id and not await check_subscription(bot, user_id):
             builder = InlineKeyboardBuilder()
-            builder.button(text="📢 Kanalga obuna bo'lish", url=CHANNEL_URL)
+            if channel_url:
+                builder.button(text="📢 Kanalga obuna bo'lish", url=channel_url)
             builder.button(text="✅ Obunani tekshirish", callback_data="check_sub")
             builder.adjust(1)
             
@@ -178,14 +202,20 @@ async def main():
     @dp.callback_query(F.data == "check_sub")
     async def callback_check_sub(callback: types.CallbackQuery):
         user_id = callback.from_user.id
+        channel_id, channel_url = get_channel_config()
+        
         if await check_subscription(bot, user_id):
             try:
                 await callback.message.delete()
             except:
                 pass
+            
+            count = add_user(user_id)
             await callback.message.answer(
-                "✅ Rahmat! Obuna tasdiqlandi.\n\n"
-                "📥 Endi havolani yoki qo'shiq nomini yuborishingiz mumkin!",
+                f"✨ <b>SaberPlus Bot</b>'ga xush kelibsiz!\n\n"
+                f"📊 Jami foydalanuvchilar: <b>{count} ta</b>\n\n"
+                "📥 Menga Instagram, YouTube, TikTok havolasini yoki istalgan **qo'shiq nomini** yuboring. "
+                "Men sizga video yoki musiqani topib beraman!",
                 reply_markup=get_main_keyboard()
             )
         else:
@@ -194,6 +224,39 @@ async def main():
     @dp.callback_query(F.data == "about_bot")
     async def about_callback(callback: types.CallbackQuery):
         await callback.answer("SaberPlus — Instagram, YouTube, TikTok'dan video va istalgan musiqani qidirib topib beruvchi tezkor bot!", show_alert=True)
+
+    # --- ADMIN: TELEGRAM ORQALI KANALNI BOSHQARISH ---
+    @dp.message(F.text.startswith("/addchannel"))
+    async def set_new_channel(message: types.Message):
+        if message.from_user.username != ADMIN_USERNAME.lstrip('@'):
+            return
+        
+        parts = message.text.split(maxsplit=2)
+        if len(parts) < 3:
+            await message.answer("❌ Xato format!\nIshlatilishi: `/addchannel @kanal_username https://t.me/kanal_link`")
+            return
+        
+        new_id = parts[1].strip()
+        new_url = parts[2].strip()
+        
+        if save_channel_config(new_id, new_url):
+            await message.answer(f"✅ Yangi majburiy kanal muvaffaqiyatli o'rnatildi!\n\n📢 ID: `{new_id}`\n🔗 Havola: {new_url}")
+        else:
+            await message.answer("❌ Kanalni saqlashda xatolik yuz berdi.")
+
+    @dp.message(F.text == "/channels")
+    async def show_current_channel(message: types.Message):
+        if message.from_user.username != ADMIN_USERNAME.lstrip('@'):
+            return
+        c_id, c_url = get_channel_config()
+        await message.answer(f"📌 **Hozirgi majburiy kanal:**\n\nID/Username: `{c_id}`\nHavola: {c_url}")
+
+    @dp.message(F.text == "/delchannel")
+    async def remove_channel(message: types.Message):
+        if message.from_user.username != ADMIN_USERNAME.lstrip('@'):
+            return
+        save_channel_config("", "")
+        await message.answer("✅ Majburiy kanal olib tashlandi. Hozircha obuna talab qilinmaydi.")
 
     @dp.message(F.text.startswith("/send"))
     async def broadcast_message(message: types.Message):
@@ -230,10 +293,12 @@ async def main():
     @dp.message(F.text.startswith("http"))
     async def handle_url(message: types.Message):
         user_id = message.from_user.id
+        channel_id, channel_url = get_channel_config()
         
-        if CHANNEL_ID and not await check_subscription(bot, user_id):
+        if channel_id and not await check_subscription(bot, user_id):
             builder = InlineKeyboardBuilder()
-            builder.button(text="📢 Kanalga obuna bo'lish", url=CHANNEL_URL)
+            if channel_url:
+                builder.button(text="📢 Kanalga obuna bo'lish", url=channel_url)
             builder.button(text="✅ Obunani tekshirish", callback_data="check_sub")
             builder.adjust(1)
             await message.answer("⚠️ Botdan foydalanish uchun avval homiy kanalga obuna bo'ling!", reply_markup=builder.as_markup())
@@ -312,16 +377,18 @@ async def main():
                 except:
                     pass
 
-    # Qo'shiq nomini yozganda qidirib beradigan qism
     @dp.message(F.text)
     async def handle_text_search(message: types.Message):
         if message.text.startswith('/'):
             return
             
         user_id = message.from_user.id
-        if CHANNEL_ID and not await check_subscription(bot, user_id):
+        channel_id, channel_url = get_channel_config()
+        
+        if channel_id and not await check_subscription(bot, user_id):
             builder = InlineKeyboardBuilder()
-            builder.button(text="📢 Kanalga obuna bo'lish", url=CHANNEL_URL)
+            if channel_url:
+                builder.button(text="📢 Kanalga obuna bo'lish", url=channel_url)
             builder.button(text="✅ Obunani tekshirish", callback_data="check_sub")
             builder.adjust(1)
             await message.answer("⚠️ Botdan foydalanish uchun avval homiy kanalga obuna bo'ling!", reply_markup=builder.as_markup())
@@ -356,7 +423,7 @@ async def main():
             if audio_path and os.path.exists(audio_path):
                 try:
                     os.remove(audio_path)
-                except:
+                end:
                     pass
 
     await bot.delete_webhook(drop_pending_updates=True)
